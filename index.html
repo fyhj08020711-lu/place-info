@@ -50,22 +50,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 const PRICE = {PRICE_LEVEL_FREE:'免費',PRICE_LEVEL_INEXPENSIVE:'$ 平價',PRICE_LEVEL_MODERATE:'$$ 中等',PRICE_LEVEL_EXPENSIVE:'$$$ 偏高',PRICE_LEVEL_VERY_EXPENSIVE:'$$$$ 高價'};
 const FIELDS = ['places.id','places.displayName','places.formattedAddress','places.nationalPhoneNumber',
   'places.rating','places.userRatingCount','places.priceLevel','places.priceRange','places.websiteUri',
-  'places.googleMapsUri','places.primaryTypeDisplayName','places.regularOpeningHours','places.currentOpeningHours','places.parkingOptions','places.location','places.editorialSummary','places.reviews'].join(',');
-
-function reviewsHtml(p){
-  const R = (p.reviews || []).slice(0, 5);
-  if(!R.length) return '';
-  const body = R.map(v => {
-    const a = v.authorAttribution || {};
-    const who = a.uri ? `<a target="_blank" rel="noopener" href="${esc(a.uri)}">${esc(a.displayName || '使用者')}</a>` : esc(a.displayName || '使用者');
-    const t = (v.text && v.text.text) || (v.originalText && v.originalText.text) || '';
-    return `<div style="margin:8px 0;padding-top:8px;border-top:1px solid var(--line)">
-      <b>${'⭐'.repeat(Math.round(v.rating || 0))}</b> ${who}
-      <span style="color:var(--sub);font-size:.8rem">${esc(v.relativePublishTimeDescription || '')}</span>
-      <div style="margin-top:4px">${esc(t)}</div></div>`;
-  }).join('');
-  return `<details><summary>查看 ${R.length} 則評論</summary>${body}</details>`;
-}
+  'places.googleMapsUri','places.primaryTypeDisplayName','places.regularOpeningHours','places.currentOpeningHours','places.parkingOptions','places.location'].join(',');
 
 const PARK_LABEL = {freeParkingLot:'免費停車場',paidParkingLot:'收費停車場',freeGarageParking:'免費車庫',paidGarageParking:'收費車庫',valetParking:'代客泊車',freeStreetParking:'免費路邊停車',paidStreetParking:'收費路邊停車'};
 const OWN_LOT = ['freeParkingLot','paidParkingLot','freeGarageParking','paidGarageParking','valetParking'];
@@ -133,10 +118,7 @@ function render(list){
     const hours = p.regularOpeningHours && p.regularOpeningHours.weekdayDescriptions;
     const price = priceText(p);
     const pk = parkInfo(p);
-    const intro = p.editorialSummary && p.editorialSummary.text;
-    const rv = reviewsHtml(p);
     const rows = [
-      intro && ['介紹', esc(intro)],
       ['停車', pk.own
         ? `✅ 有附設停車場（${esc(pk.labels.join('、'))}）`
         : `未標示附設停車場${pk.labels.length ? '（' + esc(pk.labels.join('、')) + '）' : ''}<div class="np" data-i="${i}" style="margin-top:6px"></div>`],
@@ -144,7 +126,6 @@ function render(list){
       p.nationalPhoneNumber && ['電話', `<a href="tel:${esc(p.nationalPhoneNumber)}">${esc(p.nationalPhoneNumber)}</a>`],
       p.rating && ['評價', `⭐ ${p.rating}（${p.userRatingCount ?? 0} 則）`],
       price && ['價格', esc(price)],
-      rv && ['評論', rv],
       hours && ['營業時間', `<details><summary>查看每週時間</summary>${hours.map(esc).join('<br>')}</details>`],
     ].filter(Boolean).map(([k,v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
     return `<div class="card">
