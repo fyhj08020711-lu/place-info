@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>店家資訊查詢</title>
+<style>
+  :root{--bg:#f4f6fa;--card:#fff;--text:#1d2433;--sub:#6b7488;--accent:#2563eb;--line:#e3e7ef;--ok:#16a34a;--bad:#dc2626}
+  @media (prefers-color-scheme:dark){:root{--bg:#10141c;--card:#1a2030;--text:#e8ecf4;--sub:#9aa4b8;--accent:#6ea0ff;--line:#2a3247}}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,"Noto Sans TC","Microsoft JhengHei",sans-serif;background:var(--bg);color:var(--text)}
+  .wrap{max-width:720px;margin:0 auto;padding:20px 16px 60px}
+  h1{font-size:1.4rem;margin:8px 0 16px}
+  form{display:flex;gap:8px}
+  input[type=search]{flex:1;font-size:1rem;padding:12px 14px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--text)}
+  button{font-size:1rem;padding:12px 18px;border:0;border-radius:10px;background:var(--accent);color:#fff;cursor:pointer}
+  button:disabled{opacity:.6}
+  .opts{margin:10px 2px;font-size:.9rem;color:var(--sub)}
+  .opts label{display:inline-flex;align-items:center;gap:6px}
+  #status{margin:14px 2px;color:var(--sub);font-size:.95rem}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:12px}
+  .card h2{font-size:1.1rem;margin:0 0 4px}
+  .tag{display:inline-block;font-size:.75rem;background:var(--bg);color:var(--sub);border-radius:6px;padding:2px 8px;margin:0 6px 8px 0}
+  .open{color:var(--ok)} .closed{color:var(--bad)}
+  dl{margin:8px 0 0;display:grid;grid-template-columns:5.5em 1fr;gap:6px 10px;font-size:.93rem}
+  dt{color:var(--sub)} dd{margin:0;word-break:break-all}
+  details{margin-top:2px} summary{cursor:pointer;color:var(--accent)}
+  .links{display:flex;gap:14px;margin-top:12px;font-size:.93rem;flex-wrap:wrap}
+  a{color:var(--accent);text-decoration:none}
+  .foot{margin-top:24px;font-size:.8rem;color:var(--sub);text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🔍 店家／地點資訊查詢</h1>
+  <form id="f">
+    <input id="q" type="search" placeholder="輸入店家或地點名稱，例如：鼎泰豐" autocomplete="off" required>
+    <button id="btn" type="submit">查詢</button>
+  </form>
+  <div class="opts"><label><input type="checkbox" id="near"> 以我的位置優先</label></div>
+  <div id="status"></div>
+  <div id="out"></div>
+  <div class="foot">資料來源：Google Places</div>
+</div>
+
+<script>
+const API_KEY = 'AIzaSyAfdkBzgxSWCzG45MLL6gKA5yqxXZifji8';
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const PRICE = {PRICE_LEVEL_FREE:'免費',PRICE_LEVEL_INEXPENSIVE:'$ 平價',PRICE_LEVEL_MODERATE:'$$ 中等',PRICE_LEVEL_EXPENSIVE:'$$$ 偏高',PRICE_LEVEL_VERY_EXPENSIVE:'$$$$ 高價'};
+const FIELDS = ['places.id','places.displayName','places.formattedAddress','places.nationalPhoneNumber',
+  'places.rating','places.userRatingCount','places.priceLevel','places.priceRange','places.websiteUri',
+  'places.googleMapsUri','places.primaryTypeDisplayName','places.regularOpeningHours','places.currentOpeningHours'].join(',');
+
+const getPos = () => new Promise(res => {
+  if(!navigator.geolocation) return res(null);
+  navigator.geolocation.getCurrentPosition(p => res({lat:p.coords.latitude, lon:p.coords.longitude}), () => res(null), {timeout:6000});
+});
+
+function priceText(p){
+  const r = p.priceRange;
+  if(r && r.startPrice){
+    const cur = r.startPrice.currencyCode === 'TWD' ? 'NT$' : (r.startPrice.currencyCode + ' ');
+    const a = r.startPrice.units, b = r.endPrice && r.endPrice.units;
+    return `${cur}${a}${b ? '–' + b : '以上'}`;
+  }
+  return PRICE[p.priceLevel] || '';
+}
+
+function render(list){
+  if(!list.length){ $('out').innerHTML=''; $('status').textContent='找不到相關資訊，請換個關鍵字試試。'; return; }
+  $('status').textContent = `找到 ${list.length} 筆相關結果`;
+  $('out').innerHTML = list.map(p => {
+    const name = p.displayName ? p.displayName.text : '';
+    const openNow = p.currentOpeningHours && p.currentOpeningHours.openNow;
+    const hours = p.regularOpeningHours && p.regularOpeningHours.weekdayDescriptions;
+    const price = priceText(p);
+    const rows = [
+      ['地址', esc(p.formattedAddress)],
+      p.nationalPhoneNumber && ['電話', `<a href="tel:${esc(p.nationalPhoneNumber)}">${esc(p.nationalPhoneNumber)}</a>`],
+      p.rating && ['評價', `⭐ ${p.rating}（${p.userRatingCount ?? 0} 則）`],
+      price && ['價格', esc(price)],
+      hours && ['營業時間', `<details><summary>查看每週時間</summary>${hours.map(esc).join('<br>')}</details>`],
+    ].filter(Boolean).map(([k,v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
+    return `<div class="card">
+      <h2>${esc(name)}</h2>
+      ${p.primaryTypeDisplayName ? `<span class="tag">${esc(p.primaryTypeDisplayName.text)}</span>` : ''}
+      ${openNow === true ? '<span class="tag open">營業中</span>' : openNow === false ? '<span class="tag closed">休息中</span>' : ''}
+      <dl>${rows}</dl>
+      <div class="links">
+        ${p.googleMapsUri ? `<a target="_blank" rel="noopener" href="${esc(p.googleMapsUri)}">📍 Google 地圖</a>` : ''}
+        ${p.websiteUri ? `<a target="_blank" rel="noopener" href="${esc(p.websiteUri)}">🌐 官方網站</a>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+$('f').addEventListener('submit', async e => {
+  e.preventDefault();
+  const q = $('q').value.trim();
+  if(!q) return;
+  $('btn').disabled = true; $('out').innerHTML=''; $('status').textContent='查詢中…';
+  try{
+    const body = {textQuery:q, languageCode:'zh-TW', regionCode:'TW', pageSize:10};
+    if($('near').checked){
+      const pos = await getPos();
+      if(pos) body.locationBias = {circle:{center:{latitude:pos.lat, longitude:pos.lon}, radius:5000}};
+    }
+    const r = await fetch('https://places.googleapis.com/v1/places:searchText', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-Goog-Api-Key':API_KEY,'X-Goog-FieldMask':FIELDS},
+      body:JSON.stringify(body)
+    });
+    const j = await r.json();
+    if(!r.ok) throw new Error((j.error && j.error.message) || ('HTTP ' + r.status));
+    render(j.places || []);
+  }catch(err){
+    $('status').textContent = '查詢失敗：' + err.message;
+  }finally{
+    $('btn').disabled = false;
+  }
+});
+</script>
+</body>
+</html>
